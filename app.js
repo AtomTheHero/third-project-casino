@@ -7,35 +7,101 @@
 
 'use strict';
 
-/* ---------------- playback engine ---------------- */
-let runId = 0;          // bumped on every restart / scene jump -> cancels old runs
+/* ---------------- playback engine with seek ---------------- */
+let runId = 0;          // bumped on every restart / seek -> cancels old runs
 let paused = false;
+let vtime = 0;          // virtual demo time (ms since demo start)
+let ffTarget = 0;       // fast-forward: consume sleeps instantly until vtime reaches this
 
 const $ = (id) => document.getElementById(id);
 
 function sleep(ms) {
   const myRun = runId;
   return new Promise((resolve, reject) => {
+    /* fast-forward mode: consume instantly (microtask, no real wait) */
+    if (vtime + ms <= ffTarget) {
+      vtime += ms;
+      queueMicrotask(() => (myRun === runId ? resolve() : reject({ cancelled: true })));
+      return;
+    }
+    let remaining = ms;
+    if (vtime < ffTarget) { remaining -= (ffTarget - vtime); vtime = ffTarget; }
     let elapsed = 0;
     const step = 40;
     const tick = () => {
       if (myRun !== runId) return reject({ cancelled: true });
-      if (!paused) elapsed += step;
-      if (elapsed >= ms) return resolve();
+      if (!paused) { elapsed += step; vtime += step; updateScrubber(); }
+      if (elapsed >= remaining) return resolve();
       setTimeout(tick, step);
     };
     setTimeout(tick, step);
   });
 }
 
+/* timeline marks (measured; used by scrubber chapters + phase nav) */
+const MARKS = {};
+function mark(name) {
+  MARKS[name] = Math.round(vtime);
+  $('stage').dataset.marks = JSON.stringify(MARKS);
+}
+
+/* chapter times are measured from an instrumented full run (see MARKS) */
+const TOTAL = 124000;
+const CHAPTERS = [
+  ['INTRO', 0], ['HAND 1', 6200], ['HAND 2', 25000], ['HAND 3', 43800],
+  ['HAND 4', 64300], ['PROFILE', 82500], ['SIMULATION', 98500],
+  ['DECISION', 105500], ['HOST PHONE', 114500],
+];
+const PHASE_STARTS = { 1: 0, 2: 82500, 3: 98500 };
+
 $('pauseBtn').addEventListener('click', () => {
   paused = !paused;
   $('pauseBtn').textContent = paused ? '▶ RESUME' : '⏸ PAUSE';
 });
-$('restartBtn').addEventListener('click', () => startDemo(1));
-$('replayBtn').addEventListener('click', () => startDemo(1));
+$('restartBtn').addEventListener('click', () => startDemo(0));
+$('replayBtn').addEventListener('click', () => startDemo(0));
 document.querySelectorAll('.phase-btn').forEach(btn =>
-  btn.addEventListener('click', () => startDemo(+btn.dataset.scene)));
+  btn.addEventListener('click', () => startDemo(PHASE_STARTS[+btn.dataset.scene])));
+
+/* ---------------- scrubber UI ---------------- */
+function updateScrubber() {
+  const p = Math.min(vtime / TOTAL, 1) * 100;
+  $('scrubFill').style.width = p + '%';
+  if (!scrubDragging) $('scrubHead').style.left = p + '%';
+}
+
+let scrubDragging = false;
+(function buildScrubber() {
+  const track = $('scrubTrack');
+  for (const [label, t] of CHAPTERS) {
+    const tick = document.createElement('div');
+    tick.className = 'scrub-tick';
+    tick.style.left = (t / TOTAL * 100) + '%';
+    track.appendChild(tick);
+    const chap = document.createElement('button');
+    chap.className = 'scrub-chap';
+    chap.style.left = (t / TOTAL * 100) + '%';
+    chap.textContent = label;
+    chap.addEventListener('click', (e) => { e.stopPropagation(); startDemo(t); });
+    $('scrubChapters').appendChild(chap);
+  }
+  const pctFromEvent = (e) => {
+    const r = track.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  };
+  track.addEventListener('pointerdown', (e) => {
+    scrubDragging = true;
+    track.setPointerCapture(e.pointerId);
+    $('scrubHead').style.left = (pctFromEvent(e) * 100) + '%';
+  });
+  track.addEventListener('pointermove', (e) => {
+    if (scrubDragging) $('scrubHead').style.left = (pctFromEvent(e) * 100) + '%';
+  });
+  track.addEventListener('pointerup', (e) => {
+    scrubDragging = false;
+    startDemo(pctFromEvent(e) * TOTAL);
+  });
+})();
 
 function showScene(n) {
   document.querySelectorAll('.scene').forEach(s => s.classList.remove('visible'));
@@ -54,16 +120,22 @@ async function titleCard(phase, main, sub, hold = 2600) {
   await sleep(500);
 }
 
-async function startDemo(fromScene) {
+async function startDemo(targetMs = 0) {
   runId++;
   paused = false;
+  vtime = 0;
+  ffTarget = Math.max(0, Math.min(targetMs, TOTAL - 1000));
   $('pauseBtn').textContent = '⏸ PAUSE';
   $('endOverlay').classList.remove('show');
   $('titleOverlay').classList.remove('show');
+  updateScrubber();
   try {
-    if (fromScene <= 1) await runScene1();
-    if (fromScene <= 2) await runScene2();
+    await runScene1();
+    await runScene2();
     await runScene3();
+    mark('end');
+    vtime = TOTAL;
+    updateScrubber();
     $('endOverlay').classList.add('show');
   } catch (e) {
     if (!e || !e.cancelled) console.error(e);
@@ -348,6 +420,7 @@ async function runScene1() {
   await sleep(1000);
 
   for (let i = 0; i < HANDS.length; i++) {
+    mark('hand' + (i + 1));
     await playHand(HANDS[i], i);
   }
 
@@ -508,6 +581,7 @@ const DERIVED = [
 ];
 
 async function runScene2() {
+  mark('scene2');
   showScene(2);
   $('rawStream').innerHTML = '';
   $('profileGrid').innerHTML = '';
@@ -629,6 +703,7 @@ const TRACE_LINES = [
 ];
 
 async function runScene3() {
+  mark('scene3');
   showScene(3);
   $('intelInput').innerHTML = '';
   $('coreReadouts').innerHTML = '';
@@ -675,6 +750,7 @@ async function runScene3() {
   await sleep(400);
 
   /* action evaluation */
+  mark('decision');
   $('actionsHead').style.opacity = 1;
   const rows = [];
   for (const a of ACTIONS) {
@@ -721,6 +797,7 @@ async function runScene3() {
   await sleep(1200);
 
   /* push to phone */
+  mark('phone');
   const notif = document.createElement('div');
   notif.className = 'notif priority';
   notif.innerHTML = `
@@ -769,5 +846,6 @@ async function runScene3() {
   await sleep(2600);
 }
 
-/* ---------------- go ---------------- */
-startDemo(1);
+/* ---------------- go (optional ?t=SECONDS deep link) ---------------- */
+const startAtSec = new URLSearchParams(location.search).get('t');
+startDemo(startAtSec ? +startAtSec * 1000 : 0);
