@@ -15,7 +15,10 @@ let ffTarget = 0;       // fast-forward: consume sleeps instantly until vtime re
 
 const $ = (id) => document.getElementById(id);
 
+const PACE = 1.15;   // global pacing multiplier (>1 = slower, calmer)
+
 function sleep(ms) {
+  ms = Math.round(ms * PACE);
   const myRun = runId;
   return new Promise((resolve, reject) => {
     /* fast-forward mode: consume instantly (microtask, no real wait) */
@@ -46,13 +49,13 @@ function mark(name) {
 }
 
 /* chapter times are measured from an instrumented full run (see MARKS) */
-const TOTAL = 124200;
+const TOTAL = 142840;
 const CHAPTERS = [
-  ['INTRO', 0], ['HAND 1', 5720], ['HAND 2', 23120], ['HAND 3', 41520],
-  ['HAND 4', 60000], ['PROFILE', 81040], ['SIMULATION', 97480],
-  ['DECISION', 106760], ['HOST PHONE', 115200],
+  ['INTRO', 0], ['HAND 1', 6600], ['HAND 2', 26680], ['HAND 3', 47920],
+  ['HAND 4', 69280], ['PROFILE', 93560], ['SIMULATION', 112240],
+  ['DECISION', 122760], ['HOST PHONE', 132440],
 ];
-const PHASE_STARTS = { 1: 0, 2: 81040, 3: 97480 };
+const PHASE_STARTS = { 1: 0, 2: 93560, 3: 112240 };
 
 $('pauseBtn').addEventListener('click', () => {
   paused = !paused;
@@ -223,9 +226,8 @@ function cvBox(x, y, w, h, label, cls = '') {
 }
 
 function updateCountHud(rank) {
+  /* count tracked internally for the AP model; no longer surfaced in the HUD */
   if (rank) runningCount += HILO(rank);
-  const tc = (runningCount / decksLeft).toFixed(1);
-  $('hudCount').textContent = `RC ${runningCount >= 0 ? '+' : ''}${runningCount} · TC ${tc >= 0 ? '+' : ''}${tc}`;
 }
 
 async function banner(text, cls, hold = 1500) {
@@ -326,7 +328,7 @@ async function animateGesture(kind) {
   wrap.getBoundingClientRect();
   wrap.classList.add('in');                      // hand enters from player edge
   await sleep(480);
-  logEvent('POSE', 'Hand detected · 21 landmarks locked', '');
+  logEvent('POSE', 'Player hand motion detected · tracking', '');
   wrap.classList.add(tap ? 'tap' : 'wave');      // gesture motion
   await sleep(1550);
   wrap.classList.add('out');                     // hand withdraws
@@ -438,26 +440,26 @@ async function playHand(h, idx) {
   /* --- bet detection --- */
   const stack = chipStack(46.6, 59.5, h.chips);
   await sleep(450);
-  const betBox = cvBox(44.5, 55.5, 9, 12, `WAGER $${h.bet} · 99.6%`);
+  const betBox = cvBox(44.5, 55.5, 9, 12, `WAGER $${h.bet} DETECTED`);
   logEvent('CHIP', `Wager detected: $${h.bet} (${h.chips.length} chips) seat 5`, 'ocr');
   $('strategyBody').innerHTML = `Hand #${sessionHands + 1} · wager <span class="hl">$${h.bet}</span><br>Dealing…`;
   await sleep(900);
 
   /* --- deal: P1, D-up, P2, D-hole --- */
   const pc1 = await dealCard(h.player[0][0], h.player[0][1], 41, 66, -7, false);
-  cardBox(41, 66, `${h.player[0][0]}${h.player[0][1]} · 99.4%`);
+  cardBox(41, 66, `${h.player[0][0]}${h.player[0][1]}`);
   logEvent('OCR', `Card: ${h.player[0][0]}${h.player[0][1]} → player seat 5`, 'ocr');
   updateCountHud(h.player[0][0]);
   await sleep(420);
 
   await dealCard(h.dealerUp[0], h.dealerUp[1], 43, 16, -4, false);
-  cardBox(43, 16, `${h.dealerUp[0]}${h.dealerUp[1]} · 99.2%`);
+  cardBox(43, 16, `${h.dealerUp[0]}${h.dealerUp[1]}`);
   logEvent('OCR', `Card: ${h.dealerUp[0]}${h.dealerUp[1]} → dealer upcard`, 'ocr');
   updateCountHud(h.dealerUp[0]);
   await sleep(420);
 
   const pc2 = await dealCard(h.player[1][0], h.player[1][1], 46.5, 67.5, 5, false);
-  cardBox(46.5, 67.5, `${h.player[1][0]}${h.player[1][1]} · 99.5%`);
+  cardBox(46.5, 67.5, `${h.player[1][0]}${h.player[1][1]}`);
   logEvent('OCR', `Card: ${h.player[1][0]}${h.player[1][1]} → player seat 5`, 'ocr');
   updateCountHud(h.player[1][0]);
   await sleep(420);
@@ -481,7 +483,7 @@ async function playHand(h, idx) {
 
   if (h.hitCard) {
     const hc = await dealCard(h.hitCard[0], h.hitCard[1], 52, 69, 12, false);
-    cardBox(52, 69, `${h.hitCard[0]}${h.hitCard[1]} · 99.1%`);
+    cardBox(52, 69, `${h.hitCard[0]}${h.hitCard[1]}`);
     logEvent('OCR', `Card: ${h.hitCard[0]}${h.hitCard[1]} → player seat 5`, 'ocr');
     updateCountHud(h.hitCard[0]);
     await sleep(600);
@@ -502,14 +504,14 @@ async function playHand(h, idx) {
 
   /* --- dealer resolves --- */
   flipCard(hole, h.dealerHole[0], h.dealerHole[1]);
-  cardBox(48.5, 16.5, `${h.dealerHole[0]}${h.dealerHole[1]} · 99.0%`);
+  cardBox(48.5, 16.5, `${h.dealerHole[0]}${h.dealerHole[1]}`);
   logEvent('OCR', `Hole card revealed: ${h.dealerHole[0]}${h.dealerHole[1]} — dealer ${h.dTotal}`, 'ocr');
   updateCountHud(h.dealerHole[0]);
   await sleep(700);
 
   for (const [r, su] of h.dealerDraws) {
     await dealCard(r, su, 53.5, 17, 9, false);
-    cardBox(53.5, 17, `${r}${su} · 99.3%`);
+    cardBox(53.5, 17, `${r}${su}`);
     logEvent('OCR', `Card: ${r}${su} → dealer`, 'ocr');
     updateCountHud(r);
     await sleep(500);
