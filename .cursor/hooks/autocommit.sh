@@ -14,4 +14,9 @@ git add -A
 git diff --cached --quiet && exit 0
 
 git commit -q -m "Auto-commit: agent finished ($(date '+%Y-%m-%d %H:%M:%S'))"
+
+# Push to GitHub in the background; if offline, this quietly fails
+# and the next successful push catches everything up.
+git push -q origin HEAD >/dev/null 2>&1 &
+
 exit 0
