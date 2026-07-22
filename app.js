@@ -74,6 +74,22 @@ async function startDemo(fromScene) {
    SCENE 1 — COMPUTER VISION CAPTURE
    ============================================================ */
 
+/* Venetian-style betting spots: [left%, top%, rotation]. Seat 5 (index 3) is our player. */
+const SPOTS = [
+  [13, 33, -33], [23.5, 44.5, -22], [34.5, 51.5, -10],
+  [45, 54, 0], [57.5, 51, 11], [69, 42.5, 23],
+];
+(function buildSpots() {
+  for (const [x, y, r] of SPOTS) {
+    const s = document.createElement('div');
+    s.className = 'spot';
+    s.style.left = x + '%'; s.style.top = y + '%';
+    s.style.transform = `rotate(${r}deg)`;
+    s.innerHTML = '<div class="rect"></div><div class="pair">PAIR</div>';
+    $('spotLayer').appendChild(s);
+  }
+})();
+
 const SUIT_RED = { '♥': 1, '♦': 1 };
 const HILO = (r) => ('23456'.includes(r) ? 1 : ('789'.includes(r) ? 0 : -1));
 
@@ -116,6 +132,11 @@ function flipCard(el, rank, suit) {
   el.classList.remove('facedown');
   el.className = 'card ' + (SUIT_RED[suit] ? 'red' : 'black');
   el.innerHTML = `<div class="corner">${rank}<small>${suit}</small></div><div class="pip">${suit}</div>`;
+}
+
+/* tight CV box around a card dealt at (x%,y%) */
+function cardBox(x, y, label) {
+  return cvBox(x - 0.55, y - 1.1, 5.6, 11.4, label);
 }
 
 /* CV bounding box at (x%,y%) sized (w%,h%) */
@@ -173,6 +194,72 @@ function chipStack(x, y, colors) {
   });
   $('chipLayer').appendChild(s);
   return s;
+}
+
+/* ---- animated hand gestures with pose-landmark overlay ---- */
+const PALM_SVG = `<svg class="hand-svg" viewBox="0 0 100 140">
+  <g class="hand-shape">
+    <rect x="27" y="30" width="11" height="48" rx="5.5"/>
+    <rect x="41" y="22" width="11" height="56" rx="5.5"/>
+    <rect x="55" y="26" width="11" height="52" rx="5.5"/>
+    <rect x="69" y="36" width="10" height="42" rx="5"/>
+    <rect x="10" y="66" width="12" height="36" rx="6" transform="rotate(30 16 84)"/>
+    <ellipse cx="50" cy="92" rx="27" ry="26"/>
+    <rect x="36" y="108" width="28" height="32" rx="9"/>
+  </g>
+  <g class="kps">
+    <polyline points="50,116 32,74 32,36"/>
+    <polyline points="50,116 46,70 46,28"/>
+    <polyline points="50,116 60,72 60,32"/>
+    <polyline points="50,116 74,78 74,42"/>
+    <polyline points="50,116 18,88 14,72"/>
+    <circle cx="50" cy="116" r="3"/>
+    <circle cx="32" cy="74" r="2.4"/><circle cx="32" cy="36" r="2.4"/>
+    <circle cx="46" cy="70" r="2.4"/><circle cx="46" cy="28" r="2.4"/>
+    <circle cx="60" cy="72" r="2.4"/><circle cx="60" cy="32" r="2.4"/>
+    <circle cx="74" cy="78" r="2.4"/><circle cx="74" cy="42" r="2.4"/>
+    <circle cx="18" cy="88" r="2.4"/><circle cx="14" cy="72" r="2.4"/>
+  </g>
+</svg>`;
+
+const POINT_SVG = `<svg class="hand-svg" viewBox="0 0 100 140">
+  <g class="hand-shape">
+    <rect x="34" y="22" width="12" height="56" rx="6"/>
+    <circle cx="58" cy="74" r="9"/>
+    <circle cx="68" cy="80" r="9"/>
+    <circle cx="76" cy="88" r="8"/>
+    <ellipse cx="54" cy="94" rx="26" ry="24"/>
+    <rect x="12" y="72" width="12" height="34" rx="6" transform="rotate(32 18 89)"/>
+    <rect x="40" y="110" width="28" height="30" rx="9"/>
+  </g>
+  <g class="kps">
+    <polyline points="54,118 40,76 40,28"/>
+    <polyline points="54,118 58,74"/>
+    <polyline points="54,118 68,80"/>
+    <circle cx="54" cy="118" r="3"/>
+    <circle cx="40" cy="76" r="2.4"/>
+    <circle cx="40" cy="28" r="2.8"/>
+    <circle cx="58" cy="74" r="2.4"/><circle cx="68" cy="80" r="2.4"/>
+  </g>
+</svg>`;
+
+async function animateGesture(kind) {
+  const tap = kind === 'HIT';
+  const wrap = document.createElement('div');
+  wrap.className = 'hand-wrap';
+  wrap.style.left = tap ? '49%' : '41.5%';
+  wrap.style.top = '59%';
+  wrap.innerHTML = (tap ? POINT_SVG : PALM_SVG) + '<div class="ripple"></div>';
+  $('floatLayer').appendChild(wrap);
+  wrap.getBoundingClientRect();
+  wrap.classList.add('in');                      // hand enters from player edge
+  await sleep(480);
+  logEvent('POSE', 'Hand detected · 21 landmarks locked', '');
+  wrap.classList.add(tap ? 'tap' : 'wave');      // gesture motion
+  await sleep(1550);
+  wrap.classList.add('out');                     // hand withdraws
+  await sleep(380);
+  wrap.remove();
 }
 
 function floatText(x, y, txt, color) {
@@ -247,7 +334,7 @@ async function runScene1() {
   clockTimer = setInterval(() => { if (!paused) { clockSec++; $('hudClock').textContent = fmtClock(clockSec); } }, 350);
 
   await titleCard('PHASE 01 / 03', 'Computer Vision Capture',
-    'One overhead camera per table. Every card, chip, gesture and payout — detected, classified and scored in real time. No pit clipboard. No guesswork.');
+    'One overhead camera per table on The Venetian casino floor. Every card, chip, gesture and payout — detected, classified and scored in real time. No pit clipboard. No guesswork.');
 
   /* lock onto the scene */
   logEvent('POSE', 'Dealer skeleton locked · conf 99.1%');
@@ -256,7 +343,7 @@ async function runScene1() {
   logEvent('POSE', 'Player seat 5 occupied · re-ID match');
   cvBox(34, 78, 32, 19, 'PLAYER #4187 · SEAT 5 · 98.7%', 'roi');
   await sleep(800);
-  logEvent('FACE', 'Identity: loyalty DB match — M. Torres (GOLD)', '');
+  logEvent('FACE', 'Identity: Venetian Rewards match — M. Torres (SAPPHIRE)', '');
   cvBox(42.5, 55, 15, 15, 'BET ZONE · SEAT 5', 'roi');
   await sleep(1000);
 
@@ -285,19 +372,19 @@ async function playHand(h, idx) {
 
   /* --- deal: P1, D-up, P2, D-hole --- */
   const pc1 = await dealCard(h.player[0][0], h.player[0][1], 41, 66, -7, false);
-  cvBox(39.5, 64, 9.5, 15, `${h.player[0][0]}${h.player[0][1]} · 99.4%`);
+  cardBox(41, 66, `${h.player[0][0]}${h.player[0][1]} · 99.4%`);
   logEvent('OCR', `Card: ${h.player[0][0]}${h.player[0][1]} → player seat 5`, 'ocr');
   updateCountHud(h.player[0][0]);
   await sleep(420);
 
   await dealCard(h.dealerUp[0], h.dealerUp[1], 43, 16, -4, false);
-  cvBox(41.5, 14, 9.5, 15, `${h.dealerUp[0]}${h.dealerUp[1]} · 99.2%`);
+  cardBox(43, 16, `${h.dealerUp[0]}${h.dealerUp[1]} · 99.2%`);
   logEvent('OCR', `Card: ${h.dealerUp[0]}${h.dealerUp[1]} → dealer upcard`, 'ocr');
   updateCountHud(h.dealerUp[0]);
   await sleep(420);
 
   const pc2 = await dealCard(h.player[1][0], h.player[1][1], 46.5, 67.5, 5, false);
-  cvBox(45, 65.5, 9.5, 15, `${h.player[1][0]}${h.player[1][1]} · 99.5%`);
+  cardBox(46.5, 67.5, `${h.player[1][0]}${h.player[1][1]} · 99.5%`);
   logEvent('OCR', `Card: ${h.player[1][0]}${h.player[1][1]} → player seat 5`, 'ocr');
   updateCountHud(h.player[1][0]);
   await sleep(420);
@@ -307,20 +394,21 @@ async function playHand(h, idx) {
   await sleep(500);
 
   /* --- strategy engine evaluates --- */
-  cvBox(38, 62.5, 19, 20.5, `PLAYER ${h.pTotal}`, 'warn');
+  cvBox(39.3, 63.2, 18.5, 17.5, `PLAYER ${h.pTotal}`, 'warn');
   logEvent('EVAL', `Player ${h.pTotal} vs dealer ${h.dealerUp[0]}`, 'eval');
   $('strategyBody').innerHTML =
     `Player: <span class="hl">${h.pTotal}</span> · Dealer: <span class="hl">${h.dealerUp[0]}${h.dealerUp[1]}</span><br>` +
     `Optimal play: <span class="good">${h.optimal}</span><br>Watching player decision…`;
   await sleep(1400);
 
-  /* --- player acts --- */
+  /* --- player acts: animated hand gesture, then classification --- */
+  await animateGesture(h.action);
   await banner(`GESTURE DETECTED: ${h.gesture}`, 'neutral', 1400);
   logEvent('POSE', `Gesture classified: ${h.action} · conf 97.8%`, '');
 
   if (h.hitCard) {
     const hc = await dealCard(h.hitCard[0], h.hitCard[1], 52, 69, 12, false);
-    cvBox(50.5, 67, 9.5, 15, `${h.hitCard[0]}${h.hitCard[1]} · 99.1%`);
+    cardBox(52, 69, `${h.hitCard[0]}${h.hitCard[1]} · 99.1%`);
     logEvent('OCR', `Card: ${h.hitCard[0]}${h.hitCard[1]} → player seat 5`, 'ocr');
     updateCountHud(h.hitCard[0]);
     await sleep(600);
@@ -341,14 +429,14 @@ async function playHand(h, idx) {
 
   /* --- dealer resolves --- */
   flipCard(hole, h.dealerHole[0], h.dealerHole[1]);
-  cvBox(47, 14.5, 9.5, 15, `${h.dealerHole[0]}${h.dealerHole[1]} · 99.0%`);
+  cardBox(48.5, 16.5, `${h.dealerHole[0]}${h.dealerHole[1]} · 99.0%`);
   logEvent('OCR', `Hole card revealed: ${h.dealerHole[0]}${h.dealerHole[1]} — dealer ${h.dTotal}`, 'ocr');
   updateCountHud(h.dealerHole[0]);
   await sleep(700);
 
   for (const [r, su] of h.dealerDraws) {
     await dealCard(r, su, 53.5, 17, 9, false);
-    cvBox(52, 15, 9.5, 15, `${r}${su} · 99.3%`);
+    cardBox(53.5, 17, `${r}${su} · 99.3%`);
     logEvent('OCR', `Card: ${r}${su} → dealer`, 'ocr');
     updateCountHud(r);
     await sleep(500);
@@ -392,7 +480,7 @@ const RAW_EVENTS = [
 
 const PROFILE_FIELDS = [
   ['PLAYER ID', '#4187', ''],
-  ['CLUB LEVEL', 'GOLD', 'gold'],
+  ['CLUB LEVEL', 'SAPPHIRE', 'sapphire'],
   ['ZONE', 'PIT 3', ''],
   ['BANK', 'BJ-BANK-2', ''],
   ['ASSET', 'BJ-07', ''],
@@ -457,7 +545,7 @@ async function runScene2() {
   try {
     await sleep(900);
     $('pfName').textContent = 'Michael Torres';
-    $('pfTier').textContent = 'GOLD TIER · MEMBER SINCE 2019 · #4187';
+    $('pfTier').textContent = 'VENETIAN REWARDS · SAPPHIRE · #4187';
 
     /* fill fields one by one */
     for (let i = 0; i < fields.length; i++) {
@@ -483,8 +571,9 @@ async function runScene2() {
     }
 
     $('pipeNote').innerHTML =
-      `<span class="hl">▸</span> Profile enriched from PMS: room 1408, <span class="hl">checkout tomorrow 11:00</span><br>` +
-      `<span class="hl">▸</span> Historical: 6 trips / 12 mo · lifetime theo $9,340<br>` +
+      `<span class="hl">▸</span> PMS: Venezia Tower Ste. 1408, <span class="hl">checkout tomorrow 11:00</span><br>` +
+      `<span class="hl">▸</span> 6 trips / 12 mo · theo $9,340 → <span class="hl">18,680 Tier Points</span><br>` +
+      `<span class="hl">▸</span> 1,320 Tier Points short of <span class="hl">RUBY</span> (20,000)<br>` +
       `<span class="hl">▸</span> Handing off to intelligence layer…`;
     await sleep(2800);
   } finally {
@@ -498,13 +587,14 @@ async function runScene2() {
 
 const INTEL_INPUT_LINES = [
   'player_id      : <b>#4187 — M. Torres</b>',
-  'tier           : <b>GOLD</b> · 6 trips / 12 mo',
+  'tier           : <b>SAPPHIRE</b> · Venetian Rewards',
+  'tier_points    : <b>18,680</b> · <span class="warn">1,320 short of RUBY</span>',
   'live_position  : <b>PIT 3 · BJ-07 · SEAT 5</b>',
   'skill_grade    : <span class="warn">C− (adherence 31%)</span>',
   'effective_edge : <span class="good">2.3%</span> vs 0.5% baseline',
   'adw            : <span class="good">$412 / day</span>',
   'ap_probability : <span class="good">2.1% — cleared</span>',
-  'room_status    : <span class="bad">CHECKOUT TOMORROW 11:00</span>',
+  'room_status    : Venezia Twr 1408 · <span class="bad">CHECKOUT 11:00</span>',
   'churn_risk     : <span class="warn">42%</span>',
   'objective      : <b>maximize retained theo</b>',
 ];
@@ -517,11 +607,25 @@ const READOUTS = [
 ];
 
 const ACTIONS = [
-  { name: 'Extend room comp +2 nights', sub: 'cost $260 · P(accept) 91% · P(stay) 68%', ev: '+$412', pct: 100, ok: true, selected: true },
-  { name: 'Event tickets — Sat night fight', sub: 'cost $150 · P(accept) 74%', ev: '+$298', pct: 72, ok: true },
-  { name: 'Dining comp for two', sub: 'cost $120 · P(accept) 88%', ev: '+$96', pct: 23, ok: true },
-  { name: '$100 free play', sub: 'cost $100 · cannibalizes live play', ev: '+$85', pct: 20, ok: true },
-  { name: 'No action', sub: '42% chance player checks out tomorrow', ev: '−$346', pct: 0, ok: false },
+  { name: 'Extend suite comp +2 nights — Venezia Tower', sub: '0.91 accept × 0.68 stay × $1,086 wknd theo',
+    gain: '+$672', cost: '−$260', ev: '+$412', pct: 100, ok: true, selected: true },
+  { name: 'Award 1,320 Tier Points → RUBY now', sub: '0.44 return-trip lift × $1,540 avg trip theo',
+    gain: '+$678', cost: '−$360', ev: '+$318', pct: 77, ok: true },
+  { name: 'Sphere show tickets — Saturday', sub: '0.74 accept × $605 extra-session theo',
+    gain: '+$448', cost: '−$150', ev: '+$298', pct: 72, ok: true },
+  { name: 'Dinner for two — Mott 32', sub: '0.88 accept × $245 late-night play after dinner',
+    gain: '+$216', cost: '−$120', ev: '+$96', pct: 23, ok: true },
+  { name: '$100 free slot play', sub: '$185 reinvested play · cannibalizes table time',
+    gain: '+$185', cost: '−$100', ev: '+$85', pct: 20, ok: true },
+  { name: 'No action', sub: '0.42 churn × $824 remaining-trip theo lost',
+    gain: '$0', cost: '$0', ev: '−$346', pct: 0, ok: false },
+];
+
+const TRACE_LINES = [
+  'P(accept offer) <b>0.91</b> × P(stays 2 nights) <b>0.68</b> = <b>0.62</b> conversion',
+  '× 2-day theo <b>$824</b> × weekend uplift <b>1.32</b> = <b class="good">+$672 expected gross</b>',
+  '− suite cost 2 nights × $130 = <b class="bad">−$260</b>',
+  '= <b class="good">NET +$412</b> · ROI <b>1.6×</b> · beats next-best action by <b>$94</b>',
 ];
 
 async function runScene3() {
@@ -530,12 +634,14 @@ async function runScene3() {
   $('coreReadouts').innerHTML = '';
   $('actionList').innerHTML = '';
   $('phoneFeed').innerHTML = '';
+  $('decisionTrace').innerHTML = '';
+  $('decisionTrace').classList.remove('on');
   $('actionsHead').style.opacity = 0;
   $('coreSims').textContent = '0';
   $('coreRing').classList.remove('done');
 
   await titleCard('PHASE 03 / 03', 'Intelligence Layer → Host',
-    'The engine simulates the player\'s future value under every action the casino could take — and pushes the single best move to the host\'s phone while the player is still in the seat.');
+    'The engine prices every action the casino could take — gross theo gained, comp cost, net expected value — and pushes the most profitable move to the host\'s phone while the player is still in the seat.');
 
   /* input lines */
   for (let i = 0; i < INTEL_INPUT_LINES.length; i++) {
@@ -576,8 +682,10 @@ async function runScene3() {
     row.className = 'action-item';
     row.innerHTML =
       `<div class="action-name">${a.name}<small>${a.sub}</small></div>` +
+      `<div class="action-col"><label>GROSS</label><b class="g">${a.gain}</b></div>` +
+      `<div class="action-col"><label>COST</label><b class="c">${a.cost}</b></div>` +
       `<div class="action-evbar"><div></div></div>` +
-      `<div class="action-ev ${a.ok ? (a.pct === 0 ? 'zero' : 'pos') : 'neg'}">${a.ev}</div>`;
+      `<div class="action-ev ${a.ok ? (a.pct === 0 ? 'zero' : 'pos') : 'neg'}"><label>NET EV</label>${a.ev}</div>`;
     $('actionList').appendChild(row);
     row.getBoundingClientRect();
     row.classList.add('on');
@@ -597,22 +705,36 @@ async function runScene3() {
       row.appendChild(badge);
     } else row.classList.add('rejected');
   });
-  await sleep(1300);
+  await sleep(900);
+
+  /* decision trace — show the math behind the winner */
+  const trace = $('decisionTrace');
+  trace.classList.add('on');
+  trace.innerHTML = '<div class="trace-head">DECISION TRACE — SUITE COMP EXTENSION</div>';
+  for (const line of TRACE_LINES) {
+    const d = document.createElement('div');
+    d.className = 'trace-line';
+    d.innerHTML = line;
+    trace.appendChild(d);
+    await sleep(650);
+  }
+  await sleep(1200);
 
   /* push to phone */
   const notif = document.createElement('div');
   notif.className = 'notif priority';
   notif.innerHTML = `
     <div class="notif-head">⚡ RECOMMENDED ACTION <span class="when">now</span></div>
-    <div class="notif-title">Michael Torres — Gold</div>
+    <div class="notif-title">Michael Torres — Sapphire</div>
     <div class="notif-body">
       At <b>BJ-07, Pit 3</b> right now · down $285 tonight.<br>
-      Offer: <b>extend room comp 2 nights</b> (room 1408).
+      Offer: <b>extend suite comp 2 nights</b> (Venezia Tower Ste. 1408).
     </div>
     <div class="notif-why">
-      <b>WHY:</b> CV skill grade C− → effective edge 2.3%.
-      ADW $412/day. Checkout 11:00 tomorrow.
-      68% stay-probability if comped → <b>EV +$412</b>.
+      <b>WHY:</b> Skill grade C− → edge 2.3%. ADW $412/day.
+      Checkout 11:00 tomorrow. $672 expected theo − $260 comp
+      = <b>net +$412 (1.6× ROI)</b>.
+      Hook: <b>1,320 Tier Pts from Ruby</b>.
     </div>
     <div class="notif-actions">
       <button class="primary" id="acceptBtn">Approve</button>
@@ -631,8 +753,8 @@ async function runScene3() {
   await sleep(900);
 
   const toasts = [
-    '<b>✓ PMS</b> — room 1408 extended through Thursday',
-    '<b>✓ CRM</b> — offer delivered to player via SMS · read 21:29',
+    '<b>✓ PMS</b> — Venezia Tower Ste. 1408 extended through Thursday',
+    '<b>✓ CRM</b> — offer sent via Venetian Rewards app · read 21:29',
     '<b>✓ LEDGER</b> — comp logged · $260 against $824 projected theo',
   ];
   for (const t of toasts) {

@@ -29,19 +29,27 @@
   <section id="scene1" class="scene">
     <div class="feed-wrap">
       <div class="feed" id="feed">
-        <!-- table felt -->
+        <!-- table felt — The Venetian layout -->
         <div class="felt">
+          <svg class="felt-svg" viewBox="0 0 1000 600" preserveAspectRatio="none">
+            <defs>
+              <path id="arcIns" d="M 55 145 Q 500 300 945 145" fill="none"></path>
+              <path id="arcBj" d="M 140 215 Q 500 330 860 215" fill="none"></path>
+            </defs>
+            <text class="arc-text big" text-anchor="middle"><textPath href="#arcIns" startOffset="50%">INSURANCE &#183; PAYS &#183; 2 TO 1</textPath></text>
+            <text class="arc-text" text-anchor="middle"><textPath href="#arcBj" startOffset="50%">BLACKJACK PAYS 3 TO 2</textPath></text>
+          </svg>
+          <div class="felt-logo">The Venetian</div>
           <div class="felt-arc"></div>
-          <div class="felt-arc inner"></div>
-          <div class="felt-text">BLACKJACK PAYS 3 TO 2 &nbsp;·&nbsp; DEALER MUST HIT SOFT 17</div>
-          <div class="felt-limits">$25 — $500</div>
+          <div class="felt-limits">BLACKJACK · $25 — $500</div>
+          <div class="chip-rack"></div>
           <div class="dealer-shadow"></div>
           <div class="player-shadow"></div>
           <div class="shoe" id="shoe">SHOE</div>
           <div class="discard"></div>
-          <div class="bet-circle" id="betCircle"></div>
         </div>
         <!-- dynamic layers -->
+        <div id="spotLayer"></div>
         <div id="cardLayer"></div>
         <div id="chipLayer"></div>
         <div id="cvLayer"></div>
@@ -50,7 +58,7 @@
         <div class="feed-hud">
           <div class="hud-left">
             <span class="rec-dot"></span> REC
-            <span class="hud-cam">CAM-12 · PIT 3 · TABLE BJ-07</span>
+            <span class="hud-cam">THE VENETIAN · PIT 3 · TABLE BJ-07 · CAM-12</span>
           </div>
           <div class="hud-right">
             <span id="hudCount">RC 0 · TC 0.0</span>
@@ -146,8 +154,9 @@
         </div>
       </div>
       <div class="core-readouts" id="coreReadouts"></div>
-      <div class="sub-head actions-head" id="actionsHead" style="opacity:0">ACTION EVALUATION — EXPECTED VALUE</div>
+      <div class="sub-head actions-head" id="actionsHead" style="opacity:0">ACTION EVALUATION — NET EV = GROSS THEO GAIN − COMP COST</div>
       <div id="actionList" class="action-list"></div>
+      <div id="decisionTrace" class="trace-box"></div>
     </div>
 
     <div class="intel-col intel-phone">
@@ -159,7 +168,7 @@
             <div class="app-logo">TS</div>
             <div>
               <div class="app-title">HOST CONSOLE</div>
-              <div class="app-sub">Marcus · Executive Host</div>
+              <div class="app-sub">Marcus · Exec Host · The Venetian</div>
             </div>
             <div class="app-live">● LIVE</div>
           </div>
