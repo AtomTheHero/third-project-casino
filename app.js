@@ -238,16 +238,21 @@ async function banner(text, cls, hold = 1500) {
   await sleep(220);
 }
 
-function setSkill(score, grade, adherence, edge, ap, avgBet) {
-  $('skillScoreNum').textContent = score;
-  $('skillGrade').textContent = grade;
-  $('skillMeter').style.width = score + '%';
-  $('adherence').textContent = adherence;
-  $('adherence').className = 'warn';
-  $('effEdge').textContent = edge;
-  $('effEdge').className = 'ok';
-  $('apProb').textContent = ap;
-  $('avgBet').textContent = avgBet;
+function setSkill(s) {
+  $('skillScoreNum').textContent = s.score;
+  $('skillGrade').textContent = s.grade;
+  $('skillMeter').style.width = s.score + '%';
+  $('adherence').textContent = s.adh;
+  $('adherence').className = s.adhCls || 'warn';
+  $('effEdge').textContent = s.edge;
+  $('effEdge').className = s.edgeCls || 'ok';
+  $('apProb').textContent = s.ap;
+  $('apProb').className = s.apCls || '';
+  $('avgBet').textContent = s.avg;
+}
+
+function setOps(pace, occ, eff) {
+  $('hudOps').textContent = `TABLE PACE ${pace} HANDS/HR · OCCUPANCY ${occ} · DEALER EFF ${eff}%`;
 }
 
 function addHandChip(label, optimal) {
@@ -318,7 +323,7 @@ const POINT_SVG = `<svg class="hand-svg" viewBox="0 0 100 140">
 </svg>`;
 
 async function animateGesture(kind) {
-  const tap = kind === 'HIT';
+  const tap = kind === 'HIT' || kind === 'DOUBLE';
   const wrap = document.createElement('div');
   wrap.className = 'hand-wrap';
   wrap.style.left = tap ? '49%' : '41.5%';
@@ -492,14 +497,13 @@ async function playHand(h, idx) {
 
   /* --- verdict --- */
   const good = h.action === h.optimal;
-  await banner(
-    good ? `✓ OPTIMAL PLAY — ${h.action}` : `✗ DEVIATION — PLAYED ${h.action}, OPTIMAL ${h.optimal}`,
-    good ? 'good' : 'bad', 1800);
+  const vText = h.verdictBanner ||
+    (good ? `✓ OPTIMAL PLAY — ${h.action}` : `✗ DEVIATION — PLAYED ${h.action}, OPTIMAL ${h.optimal}`);
+  await banner(vText, h.verdictClass || (good ? 'good' : 'bad'), 1800);
   $('strategyBody').innerHTML = h.reason + '<br>' + h.verdict;
-  logEvent('EVAL', good ? 'Decision optimal — skill model updated' : `Deviation logged — optimal was ${h.optimal}`, good ? 'eval' : 'alert');
-  addHandChip(h.chipLabel, good);
-  const s = h.skill;
-  setSkill(s.score, s.grade, s.adh, s.edge, s.ap, s.avg);
+  logEvent('EVAL', h.verdictLog || (good ? 'Decision optimal — skill model updated' : `Deviation logged — optimal was ${h.optimal}`), good ? 'eval' : 'alert');
+  addHandChip(h.chipLabel, h.chipGood !== undefined ? h.chipGood : good);
+  setSkill(h.skill);
   await sleep(1100);
 
   /* --- dealer resolves --- */
@@ -525,6 +529,10 @@ async function playHand(h, idx) {
   sessionHands++;
   $('hudHands').textContent = 'SESSION HANDS: ' + sessionHands;
   decksLeft = Math.max(3.5, decksLeft - 0.12);
+  if (h.ops) {
+    setOps(...h.ops);
+    logEvent('OPS', `Table pace ${h.ops[0]} hands/hr · occupancy ${h.ops[1]}`, 'eval');
+  }
   await sleep(900);
 }
 
