@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TABLESIGHT AI — Casino Intelligence Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header id="topbar">
+  <div class="brand">TABLE<span>SIGHT</span> <em>AI</em></div>
+  <nav id="phaseNav">
+    <button class="phase-btn" data-scene="1"><b>01</b> Vision Capture</button>
+    <button class="phase-btn" data-scene="2"><b>02</b> Data Aggregation</button>
+    <button class="phase-btn" data-scene="3"><b>03</b> Intelligence &amp; Host</button>
+  </nav>
+  <div class="controls">
+    <button id="pauseBtn" title="Pause / Resume">⏸ PAUSE</button>
+    <button id="restartBtn" title="Restart demo">↻ RESTART</button>
+  </div>
+</header>
+
+<main id="stage">
+
+  <!-- ============ SCENE 1 : COMPUTER VISION CAPTURE ============ -->
+  <section id="scene1" class="scene">
+    <div class="feed-wrap">
+      <div class="feed" id="feed">
+        <!-- table felt -->
+        <div class="felt">
+          <div class="felt-arc"></div>
+          <div class="felt-arc inner"></div>
+          <div class="felt-text">BLACKJACK PAYS 3 TO 2 &nbsp;·&nbsp; DEALER MUST HIT SOFT 17</div>
+          <div class="felt-limits">$25 — $500</div>
+          <div class="dealer-shadow"></div>
+          <div class="player-shadow"></div>
+          <div class="shoe" id="shoe">SHOE</div>
+          <div class="discard"></div>
+          <div class="bet-circle" id="betCircle"></div>
+        </div>
+        <!-- dynamic layers -->
+        <div id="cardLayer"></div>
+        <div id="chipLayer"></div>
+        <div id="cvLayer"></div>
+        <div id="floatLayer"></div>
+        <!-- HUD -->
+        <div class="feed-hud">
+          <div class="hud-left">
+            <span class="rec-dot"></span> REC
+            <span class="hud-cam">CAM-12 · PIT 3 · TABLE BJ-07</span>
+          </div>
+          <div class="hud-right">
+            <span id="hudCount">RC 0 · TC 0.0</span>
+            <span id="hudClock">21:14:32</span>
+          </div>
+        </div>
+        <div class="feed-hud-bottom">
+          <span>YOLO-v9 CARD/CHIP/POSE · 60 FPS · LATENCY 41 ms</span>
+          <span id="hudHands">SESSION HANDS: 43</span>
+        </div>
+        <div id="actionBanner"></div>
+        <div class="scanlines"></div>
+        <div class="vignette"></div>
+      </div>
+    </div>
+
+    <aside class="panel">
+      <div class="panel-head">LIVE ANALYSIS <span class="live-pill">● LIVE</span></div>
+
+      <div class="skill-block">
+        <div class="skill-row">
+          <div class="skill-label">SKILL SCORE <span id="skillGrade" class="grade">—</span></div>
+          <div id="skillScoreNum" class="skill-num">--</div>
+        </div>
+        <div class="meter"><div id="skillMeter" class="meter-fill"></div></div>
+
+        <div class="mini-stats">
+          <div class="mini-stat"><label>BASIC STRAT ADHERENCE</label><b id="adherence">—</b></div>
+          <div class="mini-stat"><label>EFFECTIVE HOUSE EDGE</label><b id="effEdge">—</b></div>
+          <div class="mini-stat"><label>ADVANTAGE-PLAY PROB.</label><b id="apProb">—</b></div>
+          <div class="mini-stat"><label>AVG BET</label><b id="avgBet">—</b></div>
+        </div>
+      </div>
+
+      <div class="hand-history">
+        <div class="sub-head">DECISION HISTORY</div>
+        <div id="handChips" class="hand-chips"></div>
+      </div>
+
+      <div class="strategy-box" id="strategyBox">
+        <div class="sub-head">STRATEGY ENGINE</div>
+        <div id="strategyBody" class="strategy-body">Awaiting hand…</div>
+      </div>
+
+      <div class="event-log-wrap">
+        <div class="sub-head">DETECTION STREAM</div>
+        <div id="eventLog" class="event-log"></div>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ============ SCENE 2 : DATA AGGREGATION ============ -->
+  <section id="scene2" class="scene">
+    <div class="agg-col agg-stream">
+      <div class="sub-head">RAW EVENT STREAM · 1,284 EVENTS / SESSION</div>
+      <div id="rawStream" class="raw-stream"></div>
+    </div>
+
+    <div class="agg-col agg-profile">
+      <div class="profile-card" id="profileCard">
+        <div class="profile-head">
+          <div class="avatar">MT</div>
+          <div>
+            <div class="profile-name" id="pfName">— — —</div>
+            <div class="profile-sub" id="pfTier">RESOLVING IDENTITY…</div>
+          </div>
+          <div class="profile-status" id="pfStatus">SYNCING</div>
+        </div>
+        <div class="profile-grid" id="profileGrid"></div>
+      </div>
+    </div>
+
+    <div class="agg-col agg-derived">
+      <div class="sub-head">DERIVED METRICS</div>
+      <div id="derivedList" class="derived-list"></div>
+      <div class="pipe-note" id="pipeNote"></div>
+    </div>
+  </section>
+
+  <!-- ============ SCENE 3 : INTELLIGENCE LAYER + HOST ============ -->
+  <section id="scene3" class="scene">
+    <div class="intel-col intel-input">
+      <div class="sub-head">INPUT · PLAYER #4187</div>
+      <div id="intelInput" class="intel-input-card"></div>
+    </div>
+
+    <div class="intel-col intel-core">
+      <div class="core-ring" id="coreRing">
+        <div class="core-inner">
+          <div class="core-title">INTELLIGENCE<br>CORE</div>
+          <div class="core-sims" id="coreSims">0</div>
+          <div class="core-sims-label">MONTE CARLO SIMULATIONS</div>
+        </div>
+      </div>
+      <div class="core-readouts" id="coreReadouts"></div>
+      <div class="sub-head actions-head" id="actionsHead" style="opacity:0">ACTION EVALUATION — EXPECTED VALUE</div>
+      <div id="actionList" class="action-list"></div>
+    </div>
+
+    <div class="intel-col intel-phone">
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="phone-status"><span id="phoneClock">9:26 PM</span><span>LTE ▮▮▮</span></div>
+          <div class="app-header">
+            <div class="app-logo">TS</div>
+            <div>
+              <div class="app-title">HOST CONSOLE</div>
+              <div class="app-sub">Marcus · Executive Host</div>
+            </div>
+            <div class="app-live">● LIVE</div>
+          </div>
+          <div id="phoneFeed" class="phone-feed"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- overlays -->
+  <div id="titleOverlay" class="title-overlay">
+    <div class="title-phase" id="titlePhase"></div>
+    <div class="title-main" id="titleMain"></div>
+    <div class="title-sub" id="titleSub"></div>
+  </div>
+
+  <div id="endOverlay" class="end-overlay">
+    <div class="end-brand">TABLE<span>SIGHT</span> AI</div>
+    <div class="end-line">Every hand seen. Every player understood. Every decision optimized.</div>
+    <button id="replayBtn">↻ REPLAY DEMO</button>
+  </div>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
