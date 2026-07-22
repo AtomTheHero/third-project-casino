@@ -49,13 +49,14 @@ function mark(name) {
 }
 
 /* chapter times are measured from an instrumented full run (see MARKS) */
-const TOTAL = 142840;
+const TOTAL = 270880;
 const CHAPTERS = [
   ['INTRO', 0], ['HAND 1', 6600], ['HAND 2', 26680], ['HAND 3', 47920],
-  ['HAND 4', 69280], ['PROFILE', 93560], ['SIMULATION', 112240],
-  ['DECISION', 122760], ['HOST PHONE', 132440],
+  ['HAND 4', 69280], ['PROFILE', 93560], ['SIMS', 112240],
+  ['DECISION', 122840], ['PHONE', 132520], ['AP PLAYER', 142920],
+  ['AP DECISION', 217640], ['AP PHONE', 237240], ['FLOOR', 247640],
 ];
-const PHASE_STARTS = { 1: 0, 2: 93560, 3: 112240 };
+const PHASE_STARTS = { 1: 0, 2: 93560, 3: 112240, 4: 142920, 5: 247640 };
 
 $('pauseBtn').addEventListener('click', () => {
   paused = !paused;
@@ -106,11 +107,11 @@ let scrubDragging = false;
   });
 })();
 
-function showScene(n) {
+function showScene(n, tab = n) {
   document.querySelectorAll('.scene').forEach(s => s.classList.remove('visible'));
   $('scene' + n).classList.add('visible');
   document.querySelectorAll('.phase-btn').forEach(b =>
-    b.classList.toggle('active', +b.dataset.scene === n));
+    b.classList.toggle('active', +b.dataset.scene === tab));
 }
 
 async function titleCard(phase, main, sub, hold = 2600) {
@@ -135,7 +136,10 @@ async function startDemo(targetMs = 0) {
   try {
     await runScene1();
     await runScene2();
-    await runScene3();
+    await runIntel(INTEL_COMP);
+    await runSceneAP();
+    await runIntel(INTEL_AP);
+    await runSceneFloor();
     mark('end');
     vtime = TOTAL;
     updateScrubber();
@@ -361,7 +365,7 @@ const HANDS = [
     reason: 'Hard 16 vs 9 → basic strategy: <span class="hl">HIT</span> (surrender if allowed).',
     verdict: 'Player <span class="bad">STOOD on hard 16 vs 9</span> — costly deviation. EV given up: <span class="bad">−4.1%</span> of wager.',
     result: 'LOSS', payout: -100, resultText: 'DEALER 17 BEATS 16 — HOUSE WINS $100',
-    chipLabel: '16v9', skill: { score: 61, grade: 'C', adh: '33%', edge: '2.0%', ap: '4.8%', avg: '$100' }
+    chipLabel: '16v9', ops: [69, '5/6', 102], skill: { score: 61, grade: 'C', adh: '33%', edge: '2.0%', ap: '4.8%', avg: '$100' }
   },
   {
     bet: 150, chips: ['black', 'green', 'green'],
@@ -372,7 +376,7 @@ const HANDS = [
     reason: 'Soft 18 vs 6 → basic strategy: <span class="hl">DOUBLE DOWN</span>.',
     verdict: 'Player <span class="bad">failed to double soft 18 vs 6</span>. Won the hand anyway — <span class="hl">outcome ≠ skill</span>. EV given up: <span class="bad">−9.2%</span>.',
     result: 'WIN', payout: 150, resultText: 'DEALER BUSTS 25 — PLAYER WINS $150',
-    chipLabel: 'A7v6', skill: { score: 58, grade: 'C−', adh: '31%', edge: '2.2%', ap: '3.1%', avg: '$117' }
+    chipLabel: 'A7v6', ops: [71, '5/6', 104], skill: { score: 58, grade: 'C−', adh: '31%', edge: '2.2%', ap: '3.1%', avg: '$117' }
   },
   {
     bet: 100, chips: ['black', 'black'],
@@ -384,7 +388,7 @@ const HANDS = [
     reason: 'Pair of 8s vs 10 → basic strategy: <span class="hl">ALWAYS SPLIT 8s</span>.',
     verdict: 'Player <span class="bad">hit 8-8 instead of splitting</span> and busted. Signature low-skill error. EV given up: <span class="bad">−11.4%</span>.',
     result: 'LOSS', payout: -100, resultText: 'PLAYER BUSTS 26 — HOUSE WINS $100',
-    chipLabel: '88vT', skill: { score: 54, grade: 'C−', adh: '29%', edge: '2.3%', ap: '2.4%', avg: '$112' }
+    chipLabel: '88vT', ops: [72, '6/6', 104], skill: { score: 54, grade: 'C−', adh: '29%', edge: '2.3%', ap: '2.4%', avg: '$112' }
   },
   {
     bet: 125, chips: ['black', 'green'],
@@ -395,7 +399,7 @@ const HANDS = [
     reason: 'Hard 20 vs 7 → basic strategy: <span class="hl">STAND</span>.',
     verdict: '<span class="good">Correct play.</span> Bet sizing still shows <span class="hl">zero correlation with count</span> (r = 0.04) → not an advantage player.',
     result: 'WIN', payout: 125, resultText: 'DEALER BUSTS 24 — PLAYER WINS $125',
-    chipLabel: '20v7', skill: { score: 56, grade: 'C−', adh: '31%', edge: '2.3%', ap: '2.1%', avg: '$118' }
+    chipLabel: '20v7', ops: [74, '6/6', 107], skill: { score: 56, grade: 'C−', adh: '31%', edge: '2.3%', ap: '2.1%', avg: '$118' }
   },
 ];
 
@@ -407,12 +411,13 @@ async function runScene1() {
   runningCount = 2; decksLeft = 4.5; sessionHands = 43;
   clockSec = 21 * 3600 + 14 * 60 + 32;
   $('hudHands').textContent = 'SESSION HANDS: 43';
-  setSkill(63, 'C', '35%', '1.9%', '5.2%', '$104');
+  setSkill({ score: 63, grade: 'C', adh: '35%', edge: '1.9%', ap: '5.2%', avg: '$104' });
+  setOps(68, '5/6', 101);
   updateCountHud();
   clearInterval(clockTimer);
   clockTimer = setInterval(() => { if (!paused) { clockSec++; $('hudClock').textContent = fmtClock(clockSec); } }, 350);
 
-  await titleCard('PHASE 01 / 03', 'Computer Vision Capture',
+  await titleCard('PHASE 01 / 05', 'Computer Vision Capture',
     'One overhead camera per table on The Venetian casino floor. Every card, chip, gesture and payout — detected, classified and scored in real time. No pit clipboard. No guesswork.');
 
   /* lock onto the scene */
@@ -601,7 +606,7 @@ async function runScene2() {
   $('pfTier').textContent = 'RESOLVING IDENTITY…';
   const st = $('pfStatus'); st.textContent = 'SYNCING'; st.classList.remove('done');
 
-  await titleCard('PHASE 02 / 03', 'Data Aggregation',
+  await titleCard('PHASE 02 / 05', 'Data Aggregation',
     'Every detection event streams into one unified player record — the full rating a casino currently needs three systems and a pit boss to approximate, built automatically per hand.');
 
   /* build empty field grid */
@@ -669,52 +674,153 @@ async function runScene2() {
    SCENE 3 — INTELLIGENCE LAYER + HOST DECISION
    ============================================================ */
 
-const INTEL_INPUT_LINES = [
-  'player_id      : <b>#4187 — M. Torres</b>',
-  'tier           : <b>SAPPHIRE</b> · Venetian Rewards',
-  'tier_points    : <b>18,680</b> · <span class="warn">1,320 short of RUBY</span>',
-  'live_position  : <b>PIT 3 · BJ-07 · SEAT 5</b>',
-  'skill_grade    : <span class="warn">C− (adherence 31%)</span>',
-  'effective_edge : <span class="good">2.3%</span> vs 0.5% baseline',
-  'adw            : <span class="good">$412 / day</span>',
-  'ap_probability : <span class="good">2.1% — cleared</span>',
-  'room_status    : Venezia Twr 1408 · <span class="bad">CHECKOUT 11:00</span>',
-  'churn_risk     : <span class="warn">42%</span>',
-  'objective      : <b>maximize retained theo</b>',
-];
+const INTEL_COMP = {
+  mark: 'scene3', tab: 3,
+  title: ['PHASE 03 / 05', 'Intelligence Layer → Host',
+    'The engine prices every action the casino could take — gross theo gained, comp cost, net expected value — and pushes the most profitable move to the host\'s phone while the player is still in the seat.'],
+  inputHead: 'INPUT · PLAYER #4187',
+  inputLines: [
+    'player_id      : <b>#4187 — M. Torres</b>',
+    'tier           : <b>SAPPHIRE</b> · Venetian Rewards',
+    'tier_points    : <b>18,680</b> · <span class="warn">1,320 short of RUBY</span>',
+    'live_position  : <b>PIT 3 · BJ-07 · SEAT 5</b>',
+    'skill_grade    : <span class="warn">C− (adherence 31%)</span>',
+    'effective_edge : <span class="good">2.3%</span> vs 0.5% baseline',
+    'adw            : <span class="good">$412 / day</span>',
+    'ap_probability : <span class="good">2.1% — cleared</span>',
+    'room_status    : Venezia Twr 1408 · <span class="bad">CHECKOUT 11:00</span>',
+    'churn_risk     : <span class="warn">42%</span>',
+    'objective      : <b>maximize retained theo</b>',
+  ],
+  sims: 25000,
+  readouts: [
+    ['P(HOUSE PROFITS / DAY)', '97.7%', 'good'],
+    ['PLAYER WIN PROB / HAND', '41.2%', 'warn'],
+    ['THEO IF RETAINED +2 DAYS', '+$824', 'good'],
+    ['DECISION LATENCY', '212 ms', 'cyan'],
+  ],
+  actionsHead: 'ACTION EVALUATION — NET EV = GROSS THEO GAIN − COMP COST',
+  actions: [
+    { name: 'Extend suite comp +2 nights — Venezia Tower', sub: '0.91 accept × 0.68 stay × $1,086 wknd theo',
+      gain: '+$672', cost: '−$260', ev: '+$412', pct: 100, ok: true, selected: true },
+    { name: 'Award 1,320 Tier Points → RUBY now', sub: '0.44 return-trip lift × $1,540 avg trip theo',
+      gain: '+$678', cost: '−$360', ev: '+$318', pct: 77, ok: true },
+    { name: 'Sphere show tickets — Saturday', sub: '0.74 accept × $605 extra-session theo',
+      gain: '+$448', cost: '−$150', ev: '+$298', pct: 72, ok: true },
+    { name: 'Dinner for two — Mott 32', sub: '0.88 accept × $245 late-night play after dinner',
+      gain: '+$216', cost: '−$120', ev: '+$96', pct: 23, ok: true },
+    { name: '$100 free slot play', sub: '$185 reinvested play · cannibalizes table time',
+      gain: '+$185', cost: '−$100', ev: '+$85', pct: 20, ok: true },
+    { name: 'No action', sub: '0.42 churn × $824 remaining-trip theo lost',
+      gain: '$0', cost: '$0', ev: '−$346', pct: 0, ok: false },
+  ],
+  traceHead: 'DECISION TRACE — SUITE COMP EXTENSION',
+  traceLines: [
+    'P(accept offer) <b>0.91</b> × P(stays 2 nights) <b>0.68</b> = <b>0.62</b> conversion',
+    '× 2-day theo <b>$824</b> × weekend uplift <b>1.32</b> = <b class="good">+$672 expected gross</b>',
+    '− suite cost 2 nights × $130 = <b class="bad">−$260</b>',
+    '= <b class="good">NET +$412</b> · ROI <b>1.6×</b> · beats next-best action by <b>$94</b>',
+  ],
+  phoneMark: 'phone',
+  notifClass: 'notif priority',
+  notifHTML: `
+    <div class="notif-head">⚡ RECOMMENDED ACTION <span class="when">now</span></div>
+    <div class="notif-title">Michael Torres — Sapphire</div>
+    <div class="notif-body">
+      At <b>BJ-07, Pit 3</b> right now · down $285 tonight.<br>
+      Offer: <b>extend suite comp 2 nights</b> (Venezia Tower Ste. 1408).
+    </div>
+    <div class="notif-why">
+      <b>WHY:</b> Skill grade C− → edge 2.3%. ADW $412/day.
+      Checkout 11:00 tomorrow. $672 expected theo − $260 comp
+      = <b>net +$412 (1.6× ROI)</b>.
+      Hook: <b>1,320 Tier Pts from Ruby</b>.
+    </div>
+    <div class="notif-actions">
+      <button class="primary">Approve</button>
+      <button>Adjust</button>
+      <button>Dismiss</button>
+    </div>`,
+  toasts: [
+    '<b>✓ PMS</b> — Venezia Tower Ste. 1408 extended through Thursday',
+    '<b>✓ CRM</b> — offer sent via Venetian Rewards app · read 21:29',
+    '<b>✓ LEDGER</b> — comp logged · $260 against $824 projected theo',
+  ],
+};
 
-const READOUTS = [
-  ['P(HOUSE PROFITS / DAY)', '97.7%', 'good'],
-  ['PLAYER WIN PROB / HAND', '41.2%', 'warn'],
-  ['THEO IF RETAINED +2 DAYS', '+$824', 'good'],
-  ['DECISION LATENCY', '212 ms', 'cyan'],
-];
+const INTEL_AP = {
+  mark: 'apdecision', tab: 4,
+  title: ['PHASE 04 / 05', 'Game Protection Decision',
+    'Same engine, opposite objective: when the vision layer confirms an advantage player, the system prices every defensive option and protects the house before the next shoe.'],
+  inputHead: 'INPUT · PLAYER #2291 — GAME PROTECTION',
+  inputLines: [
+    'player_id      : <b>#2291 — J. Chen</b>',
+    'tier           : <b>JADE</b> · account 11 days old',
+    'live_position  : <b>PIT 3 · BJ-07 · SEAT 5</b>',
+    'buy_in         : <b>$5,000 cash</b> · auto-logged (Title 31)',
+    'skill_grade    : <span class="bad">A+ (adherence 100%)</span>',
+    'bet_spread     : <span class="bad">12:1 · count corr r = 0.96</span>',
+    'effective_edge : <span class="bad">−1.1% (player favored)</span>',
+    'ap_probability : <span class="bad">94.2% — CONFIRMED</span>',
+    'exposure       : <span class="bad">$8,200 / trip</span>',
+    'objective      : <b>minimize loss · retain non-AP play</b>',
+  ],
+  sims: 28400,
+  readouts: [
+    ['P(ADVANTAGE PLAY)', '94.2%', 'bad'],
+    ['HOUSE EDGE VS PLAYER', '−1.1%', 'bad'],
+    ['EXPOSURE / TRIP', '−$8,200', 'bad'],
+    ['DECISION LATENCY', '190 ms', 'cyan'],
+  ],
+  actionsHead: 'ACTION EVALUATION — NET EV = LOSS AVOIDED − REVENUE GIVEN UP',
+  actions: [
+    { name: 'Flat-bet request — cap at $50', sub: 'kills 12:1 spread · keeps his −EV flat play + other games',
+      gain: '+$7,400', cost: '−$0', ev: '+$7,400', pct: 100, ok: true, selected: true },
+    { name: 'Full back-off — no more blackjack', sub: 'ends exposure · loses his poker/baccarat action + PR risk',
+      gain: '+$8,200', cost: '−$1,600', ev: '+$6,600', pct: 89, ok: true },
+    { name: 'No mid-shoe entry (block back-counting)', sub: 'halves his edge windows · he adapts within days',
+      gain: '+$3,900', cost: '−$0', ev: '+$3,900', pct: 53, ok: true },
+    { name: 'Shuffle earlier (cut 1.5 decks)', sub: 'reduces count reliability · slows table 9% for all seats',
+      gain: '+$2,800', cost: '−$900', ev: '+$1,900', pct: 26, ok: true },
+    { name: 'No action', sub: '1.4% player edge × $300 avg high-count bet, 3-day trip',
+      gain: '$0', cost: '$0', ev: '−$8,200', pct: 0, ok: false },
+  ],
+  traceHead: 'DECISION TRACE — FLAT-BET REQUEST',
+  traceLines: [
+    'Hi-Lo correlation <b>r = 0.96</b> · bet spread <b>12:1</b> ($25 → $300 at TC ≥ +3)',
+    'player edge at high counts <b>1.4%</b> × $300 × 42 hands/hr × 4.5 hr × 3 days = <b class="bad">−$8,200 exposure</b>',
+    'flat-bet cap removes spread → <b class="good">+$7,400 protected (91%)</b> · zero comp cost',
+    '= <b class="good">NET +$7,400</b> · he keeps playing flat (house edge returns) · no confrontation',
+  ],
+  phoneMark: 'apphone',
+  notifClass: 'notif priority alert',
+  notifHTML: `
+    <div class="notif-head">⚠ GAME PROTECTION <span class="when">now</span></div>
+    <div class="notif-title">J. Chen — Jade · AP confirmed 94%</div>
+    <div class="notif-body">
+      At <b>BJ-07, Pit 3</b> right now · spread $25→$300 with the count.<br>
+      Action: <b>flat-bet request, $50 max</b> — pit supervisor to deliver.
+    </div>
+    <div class="notif-why">
+      <b>WHY:</b> Perfect play + 12:1 spread (r = 0.96) = counting.
+      Exposure $8,200/trip. Flat cap protects <b>+$7,400</b>
+      with zero comp cost and no confrontation.
+    </div>
+    <div class="notif-actions">
+      <button class="primary">Approve</button>
+      <button>Adjust</button>
+      <button>Dismiss</button>
+    </div>`,
+  toasts: [
+    '<b>✓ PIT</b> — supervisor P. Ruiz dispatched to BJ-07',
+    '<b>✓ SURVEILLANCE</b> — #2291 flagged · profile shared cross-property',
+    '<b>✓ CRM</b> — comp offers & mailers suspended for #2291',
+  ],
+};
 
-const ACTIONS = [
-  { name: 'Extend suite comp +2 nights — Venezia Tower', sub: '0.91 accept × 0.68 stay × $1,086 wknd theo',
-    gain: '+$672', cost: '−$260', ev: '+$412', pct: 100, ok: true, selected: true },
-  { name: 'Award 1,320 Tier Points → RUBY now', sub: '0.44 return-trip lift × $1,540 avg trip theo',
-    gain: '+$678', cost: '−$360', ev: '+$318', pct: 77, ok: true },
-  { name: 'Sphere show tickets — Saturday', sub: '0.74 accept × $605 extra-session theo',
-    gain: '+$448', cost: '−$150', ev: '+$298', pct: 72, ok: true },
-  { name: 'Dinner for two — Mott 32', sub: '0.88 accept × $245 late-night play after dinner',
-    gain: '+$216', cost: '−$120', ev: '+$96', pct: 23, ok: true },
-  { name: '$100 free slot play', sub: '$185 reinvested play · cannibalizes table time',
-    gain: '+$185', cost: '−$100', ev: '+$85', pct: 20, ok: true },
-  { name: 'No action', sub: '0.42 churn × $824 remaining-trip theo lost',
-    gain: '$0', cost: '$0', ev: '−$346', pct: 0, ok: false },
-];
-
-const TRACE_LINES = [
-  'P(accept offer) <b>0.91</b> × P(stays 2 nights) <b>0.68</b> = <b>0.62</b> conversion',
-  '× 2-day theo <b>$824</b> × weekend uplift <b>1.32</b> = <b class="good">+$672 expected gross</b>',
-  '− suite cost 2 nights × $130 = <b class="bad">−$260</b>',
-  '= <b class="good">NET +$412</b> · ROI <b>1.6×</b> · beats next-best action by <b>$94</b>',
-];
-
-async function runScene3() {
-  mark('scene3');
-  showScene(3);
+async function runIntel(cfg) {
+  mark(cfg.mark);
+  showScene(3, cfg.tab);
   $('intelInput').innerHTML = '';
   $('coreReadouts').innerHTML = '';
   $('actionList').innerHTML = '';
@@ -724,21 +830,22 @@ async function runScene3() {
   $('actionsHead').style.opacity = 0;
   $('coreSims').textContent = '0';
   $('coreRing').classList.remove('done');
+  $('intelInputHead').textContent = cfg.inputHead;
+  $('actionsHead').textContent = cfg.actionsHead;
 
-  await titleCard('PHASE 03 / 03', 'Intelligence Layer → Host',
-    'The engine prices every action the casino could take — gross theo gained, comp cost, net expected value — and pushes the most profitable move to the host\'s phone while the player is still in the seat.');
+  await titleCard(...cfg.title);
 
   /* input lines */
-  for (let i = 0; i < INTEL_INPUT_LINES.length; i++) {
+  for (const line of cfg.inputLines) {
     const d = document.createElement('div');
-    d.innerHTML = INTEL_INPUT_LINES[i];
+    d.innerHTML = line;
     d.style.animationDelay = '0s';
     $('intelInput').appendChild(d);
     await sleep(210);
   }
 
   /* simulation counter */
-  const target = 25000;
+  const target = cfg.sims;
   let sims = 0;
   while (sims < target) {
     if (!paused) {
@@ -750,7 +857,7 @@ async function runScene3() {
   $('coreRing').classList.add('done');
 
   /* readouts */
-  for (const [label, val, cls] of READOUTS) {
+  for (const [label, val, cls] of cfg.readouts) {
     const r = document.createElement('div');
     r.className = 'readout';
     r.innerHTML = `<label>${label}</label><b class="${cls}">${val}</b>`;
@@ -760,10 +867,10 @@ async function runScene3() {
   await sleep(400);
 
   /* action evaluation */
-  mark('decision');
+  if (cfg.tab === 3) mark('decision');
   $('actionsHead').style.opacity = 1;
   const rows = [];
-  for (const a of ACTIONS) {
+  for (const a of cfg.actions) {
     const row = document.createElement('div');
     row.className = 'action-item';
     row.innerHTML =
@@ -783,7 +890,7 @@ async function runScene3() {
 
   /* select winner */
   rows.forEach((row, i) => {
-    if (ACTIONS[i].selected) {
+    if (cfg.actions[i].selected) {
       row.classList.add('selected');
       const badge = document.createElement('div');
       badge.className = 'action-badge';
@@ -796,8 +903,8 @@ async function runScene3() {
   /* decision trace — show the math behind the winner */
   const trace = $('decisionTrace');
   trace.classList.add('on');
-  trace.innerHTML = '<div class="trace-head">DECISION TRACE — SUITE COMP EXTENSION</div>';
-  for (const line of TRACE_LINES) {
+  trace.innerHTML = `<div class="trace-head">${cfg.traceHead}</div>`;
+  for (const line of cfg.traceLines) {
     const d = document.createElement('div');
     d.className = 'trace-line';
     d.innerHTML = line;
@@ -807,44 +914,22 @@ async function runScene3() {
   await sleep(1200);
 
   /* push to phone */
-  mark('phone');
+  mark(cfg.phoneMark);
   const notif = document.createElement('div');
-  notif.className = 'notif priority';
-  notif.innerHTML = `
-    <div class="notif-head">⚡ RECOMMENDED ACTION <span class="when">now</span></div>
-    <div class="notif-title">Michael Torres — Sapphire</div>
-    <div class="notif-body">
-      At <b>BJ-07, Pit 3</b> right now · down $285 tonight.<br>
-      Offer: <b>extend suite comp 2 nights</b> (Venezia Tower Ste. 1408).
-    </div>
-    <div class="notif-why">
-      <b>WHY:</b> Skill grade C− → edge 2.3%. ADW $412/day.
-      Checkout 11:00 tomorrow. $672 expected theo − $260 comp
-      = <b>net +$412 (1.6× ROI)</b>.
-      Hook: <b>1,320 Tier Pts from Ruby</b>.
-    </div>
-    <div class="notif-actions">
-      <button class="primary" id="acceptBtn">Approve</button>
-      <button>Adjust</button>
-      <button>Dismiss</button>
-    </div>`;
+  notif.className = cfg.notifClass;
+  notif.innerHTML = cfg.notifHTML;
   $('phoneFeed').appendChild(notif);
   notif.getBoundingClientRect();
   notif.classList.add('on');
   await sleep(2600);
 
   /* host approves */
-  const btn = notif.querySelector('#acceptBtn');
+  const btn = notif.querySelector('.primary');
   btn.classList.add('pressed');
   btn.textContent = '✓ Approved';
   await sleep(900);
 
-  const toasts = [
-    '<b>✓ PMS</b> — Venezia Tower Ste. 1408 extended through Thursday',
-    '<b>✓ CRM</b> — offer sent via Venetian Rewards app · read 21:29',
-    '<b>✓ LEDGER</b> — comp logged · $260 against $824 projected theo',
-  ];
-  for (const t of toasts) {
+  for (const t of cfg.toasts) {
     const el = document.createElement('div');
     el.className = 'toast';
     el.innerHTML = t;
@@ -854,6 +939,176 @@ async function runScene3() {
     await sleep(950);
   }
   await sleep(2600);
+}
+
+/* ============================================================
+   SCENARIO 2 — THE ADVANTAGE PLAYER (reuses the table scene)
+   ============================================================ */
+
+const AP_HANDS = [
+  {
+    bet: 25, chips: ['red'],
+    player: [['9','♣'], ['2','♦']], pTotal: '11 (HARD)',
+    dealerUp: ['6','♠'], dealerHole: ['9','♦'], dTotal: '15 → DRAWS',
+    dealerDraws: [['J','♣']],
+    optimal: 'DOUBLE', action: 'DOUBLE', gesture: 'CHIP PUSH — DOUBLE DOWN',
+    hitCard: ['K','♥'], hitTotal: '21',
+    reason: '11 vs 6 → basic strategy: <span class="hl">DOUBLE DOWN</span>.',
+    verdict: '<span class="good">Textbook.</span> Minimum bet while the count is neutral (TC +0.4). Watching bet sizing…',
+    result: 'WIN', payout: 50, resultText: 'DEALER BUSTS 25 — PLAYER WINS $50 (DOUBLED)',
+    chipLabel: '11v6', ops: [78, '3/6', 108],
+    skill: { score: 78, grade: 'B+', adh: '100%', edge: '0.3%', ap: '34%', avg: '$25',
+             adhCls: 'ok', apCls: 'warn' }
+  },
+  {
+    bet: 75, chips: ['green', 'green', 'green'],
+    player: [['A','♥'], ['8','♠']], pTotal: 'SOFT 19',
+    dealerUp: ['5','♣'], dealerHole: ['10','♦'], dTotal: '15 → DRAWS',
+    dealerDraws: [['9','♠']],
+    optimal: 'STAND', action: 'STAND', gesture: 'HAND WAVE — STAND',
+    reason: 'Soft 19 vs 5 → basic strategy: <span class="hl">STAND</span>.',
+    verdict: '<span class="good">Perfect again.</span> Bet tripled to $75 as the true count climbed to <span class="hl">+2.1</span>. Spread correlation rising: <span class="warn">r = 0.81</span>.',
+    result: 'WIN', payout: 75, resultText: 'DEALER BUSTS 24 — PLAYER WINS $75',
+    chipLabel: 'A8v5', ops: [78, '3/6', 108],
+    skill: { score: 86, grade: 'A−', adh: '100%', edge: '−0.2%', ap: '71%', avg: '$42',
+             adhCls: 'ok', edgeCls: 'warn', apCls: 'warn' }
+  },
+  {
+    bet: 300, chips: ['black', 'black', 'black'],
+    player: [['10','♦'], ['6','♥']], pTotal: '16 (HARD)',
+    dealerUp: ['10','♣'], dealerHole: ['6','♦'], dTotal: '16 → DRAWS',
+    dealerDraws: [['10','♥']],
+    optimal: 'HIT', action: 'STAND', gesture: 'HAND WAVE — STAND',
+    verdictBanner: '⚠ HI-LO INDEX PLAY — 16v10 STAND AT TC +4.2',
+    verdictClass: 'bad',
+    verdictLog: 'Deviation matches Hi-Lo index — counting signature',
+    chipGood: false,
+    reason: '16 vs 10 → basic strategy says HIT. But at <span class="hl">TC ≥ 0</span> the counting index says <span class="bad">STAND</span>.',
+    verdict: 'Bet jumped <span class="bad">$25 → $300</span> exactly as TC hit <span class="bad">+4.2</span>. This deviation is only correct for a counter. Spread corr: <span class="bad">r = 0.96</span>.',
+    result: 'WIN', payout: 300, resultText: 'DEALER BUSTS 26 — PLAYER WINS $300',
+    chipLabel: '16vT idx', ops: [79, '3/6', 108],
+    skill: { score: 92, grade: 'A+', adh: '100%*', edge: '−1.1%', ap: '94.2%', avg: '$133',
+             adhCls: 'ok', edgeCls: 'warn', apCls: 'warn' }
+  },
+];
+
+async function runSceneAP() {
+  mark('ap');
+  showScene(1, 4);
+  /* reset the table for a new session */
+  ['cardLayer','chipLayer','cvLayer','floatLayer','eventLog','handChips'].forEach(id => $(id).innerHTML = '');
+  $('strategyBody').innerHTML = 'Awaiting hand…';
+  runningCount = 3; decksLeft = 3.8; sessionHands = 12;
+  clockSec = 22 * 3600 + 41 * 60 + 8;
+  $('hudHands').textContent = 'SESSION HANDS: 12';
+  setSkill({ score: 74, grade: 'B', adh: '100%', ap: '18%', avg: '$25', edge: '0.4%', adhCls: 'ok' });
+  setOps(78, '3/6', 108);
+  clearInterval(clockTimer);
+  clockTimer = setInterval(() => { if (!paused) { clockSec++; $('hudClock').textContent = fmtClock(clockSec); } }, 350);
+
+  await titleCard('SCENARIO 02', 'The Advantage Player',
+    'Same table, 10:41 PM. A new face buys in for $5,000 and plays flawless blackjack. The system that comps weak players is also the one that catches sharp ones.');
+
+  logEvent('POSE', 'Dealer skeleton locked · conf 99.1%');
+  cvBox(38, 2, 24, 14, 'DEALER · STAFF #221 · 99.1%', 'roi');
+  await sleep(700);
+  logEvent('POSE', 'Player seat 5 occupied · new session opened');
+  cvBox(34, 78, 32, 19, 'PLAYER #2291 · SEAT 5 · 97.9%', 'roi');
+  await sleep(700);
+  logEvent('FACE', 'Identity: J. Chen — JADE · account 11 days old', 'alert');
+  logEvent('CHIP', 'Buy-in $5,000 cash · auto-logged (Title 31)', 'ocr');
+  cvBox(42.5, 55, 15, 15, 'BET ZONE · SEAT 5', 'roi');
+  await sleep(1000);
+
+  for (const h of AP_HANDS) await playHand(h, 0);
+
+  await banner('ADVANTAGE PLAY CONFIRMED 94.2% — ROUTING TO GAME PROTECTION', 'bad', 2600);
+  clearInterval(clockTimer);
+}
+
+/* ============================================================
+   SCENE 4 — FLOOR ZOOM-OUT
+   ============================================================ */
+
+const FLOOR_TABLES = [
+  ['BJ-05','BLACKJACK',310,4], ['BJ-07','BLACKJACK',412,5], ['BJ-09','BLACKJACK',280,3], ['BJ-11','BLACKJACK',195,4],
+  ['BAC-02','BACCARAT',1240,6], ['BAC-05','BACCARAT',890,4], ['BAC-12','BACCARAT',2150,7], ['ROU-01','ROULETTE',340,6],
+  ['ROU-03','ROULETTE',410,8], ['CR-01','CRAPS',620,9], ['CR-02','CRAPS',540,7], ['PAI-02','PAI GOW',290,5],
+  ['PAI-03','PAI GOW',185,4], ['UTH-01','ULT. HOLD\u2019EM',225,5], ['BJ-14','BLACKJACK',330,5], ['MB-01','MINI BAC',465,6],
+];
+
+const FLOOR_EVENTS = [
+  ['BJ-07', 'ok',    'Comp approved — M. Torres · +$412 EV',
+   '21:29 · <b>BJ-07</b> — Suite comp approved · <b class="good">+$412 EV</b>'],
+  ['BAC-12', 'warn', 'Buy-in $18,000 — auto-logged (Title 31)',
+   '21:44 · <b>BAC-12</b> — $18K buy-in auto-logged · <b class="warn">Title 31</b>'],
+  ['ROU-03', 'ok',   'Rating opened — #5512 (RUBY)',
+   '22:03 · <b>ROU-03</b> — New rated session · #5512 (Ruby)'],
+  ['BJ-11', 'warn',  'Dealer pace −12% — coaching flag',
+   '22:18 · <b>BJ-11</b> — Pace 61 hands/hr (−12%) · <b class="warn">ops flag</b>'],
+  ['PAI-02', 'ok',   'Host dispatched — birthday recognition',
+   '22:27 · <b>PAI-02</b> — Host dispatched · #8834 birthday · <b class="good">+$95 EV</b>'],
+  ['BJ-07', 'alert', 'AP flat-bet enforced — $7.4K protected',
+   '22:56 · <b>BJ-07</b> — Flat-bet enforced · #2291 · <b class="good">$7.4K protected</b>'],
+];
+
+async function runSceneFloor() {
+  mark('floor');
+  showScene(4, 5);
+  $('floorGrid').innerHTML = '';
+  $('queueFeed').innerHTML = '';
+  $('floorStats').innerHTML = '';
+
+  await titleCard('PHASE 05 / 05', 'The Whole Floor, One Brain',
+    'Every table, every seat, every decision — the same pipeline running property-wide, feeding one host queue. One table was the demo. This is the product.');
+
+  /* stats bar */
+  const stats = [
+    ['TABLES LIVE', '114'], ['RATED SESSIONS', '61'], ['THEO TODAY', '$438K'],
+    ['DECISIONS TODAY', '217'], ['COMP ROI', '3.2×'],
+  ];
+  for (const [label, val] of stats) {
+    const el = document.createElement('div');
+    el.className = 'floor-stat';
+    el.innerHTML = `<label>${label}</label><b>${val}</b>`;
+    $('floorStats').appendChild(el);
+    await sleep(200);
+  }
+
+  /* table grid */
+  const cards = {};
+  for (const [id, game, theo, occ] of FLOOR_TABLES) {
+    const el = document.createElement('div');
+    el.className = 'floor-table';
+    const dots = Array.from({length: 9}, (_, i) =>
+      `<span class="occ-dot${i < occ ? ' on' : ''}"></span>`).slice(0, game === 'CRAPS' ? 9 : 7).join('');
+    el.innerHTML =
+      `<div class="ft-head"><b>${id}</b><span>${game}</span></div>` +
+      `<div class="ft-theo">$${theo}<small>/HR THEO</small></div>` +
+      `<div class="ft-occ">${dots}</div>` +
+      `<div class="ft-msg"></div>`;
+    $('floorGrid').appendChild(el);
+    cards[id] = el;
+    await sleep(90);
+  }
+  await sleep(600);
+
+  /* events light up tables + host queue */
+  for (const [id, cls, msg, queueHTML] of FLOOR_EVENTS) {
+    const card = cards[id];
+    card.classList.remove('flash-ok','flash-warn','flash-alert');
+    card.getBoundingClientRect();
+    card.classList.add('flash-' + cls);
+    card.querySelector('.ft-msg').innerHTML = msg;
+    const q = document.createElement('div');
+    q.className = 'queue-item q-' + cls;
+    q.innerHTML = queueHTML;
+    $('queueFeed').prepend(q);
+    q.getBoundingClientRect();
+    q.classList.add('on');
+    await sleep(1900);
+  }
+  await sleep(2400);
 }
 
 /* ---------------- go (optional ?t=SECONDS deep link) ---------------- */

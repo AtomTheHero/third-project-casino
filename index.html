@@ -16,6 +16,8 @@
     <button class="phase-btn" data-scene="1"><b>01</b> Vision Capture</button>
     <button class="phase-btn" data-scene="2"><b>02</b> Data Aggregation</button>
     <button class="phase-btn" data-scene="3"><b>03</b> Intelligence &amp; Host</button>
+    <button class="phase-btn" data-scene="4"><b>04</b> Game Protection</button>
+    <button class="phase-btn" data-scene="5"><b>05</b> Floor View</button>
   </nav>
   <div class="controls">
     <button id="pauseBtn" title="Pause / Resume">⏸ PAUSE</button>
@@ -65,7 +67,7 @@
           </div>
         </div>
         <div class="feed-hud-bottom">
-          <span>EVERY CARD · EVERY CHIP · EVERY GESTURE — CAPTURED</span>
+          <span id="hudOps">TABLE PACE 68 HANDS/HR · OCCUPANCY 5/6 · DEALER EFF 101%</span>
           <span id="hudHands">SESSION HANDS: 43</span>
         </div>
         <div id="actionBanner"></div>
@@ -140,7 +142,7 @@
   <!-- ============ SCENE 3 : INTELLIGENCE LAYER + HOST ============ -->
   <section id="scene3" class="scene">
     <div class="intel-col intel-input">
-      <div class="sub-head">INPUT · PLAYER #4187</div>
+      <div class="sub-head" id="intelInputHead">INPUT · PLAYER #4187</div>
       <div id="intelInput" class="intel-input-card"></div>
     </div>
 
@@ -175,6 +177,18 @@
         </div>
       </div>
     </div>
+  </section>
+
+  <!-- ============ SCENE 4 : FLOOR ZOOM-OUT ============ -->
+  <section id="scene4" class="scene">
+    <div class="floor-left">
+      <div id="floorStats" class="floor-stats"></div>
+      <div id="floorGrid" class="floor-grid"></div>
+    </div>
+    <aside class="panel floor-queue">
+      <div class="panel-head">HOST ACTION QUEUE <span class="live-pill">● LIVE</span></div>
+      <div id="queueFeed" class="queue-feed"></div>
+    </aside>
   </section>
 
   <!-- overlays -->
