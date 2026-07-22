@@ -46,13 +46,13 @@ function mark(name) {
 }
 
 /* chapter times are measured from an instrumented full run (see MARKS) */
-const TOTAL = 124000;
+const TOTAL = 124200;
 const CHAPTERS = [
-  ['INTRO', 0], ['HAND 1', 6200], ['HAND 2', 25000], ['HAND 3', 43800],
-  ['HAND 4', 64300], ['PROFILE', 82500], ['SIMULATION', 98500],
-  ['DECISION', 105500], ['HOST PHONE', 114500],
+  ['INTRO', 0], ['HAND 1', 5720], ['HAND 2', 23120], ['HAND 3', 41520],
+  ['HAND 4', 60000], ['PROFILE', 81040], ['SIMULATION', 97480],
+  ['DECISION', 106760], ['HOST PHONE', 115200],
 ];
-const PHASE_STARTS = { 1: 0, 2: 82500, 3: 98500 };
+const PHASE_STARTS = { 1: 0, 2: 81040, 3: 97480 };
 
 $('pauseBtn').addEventListener('click', () => {
   paused = !paused;
