@@ -1,0 +1,12 @@
+---
+description: Pointer to the company brain — this repo is deprecated
+alwaysApply: true
+---
+
+# This repo is deprecated
+
+Active development moved to `~/Projects/tablesight-executive` (repo AtomTheHero/tablesight-executive).
+
+The shared business context ("company brain") lives at
+`~/Projects/tablesight-executive/.cursor/rules/company-brain.mdc`.
+Read it before doing product/business work, and update it there when you learn new durable facts.
